@@ -4,9 +4,8 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#include "rpc_common.h"
 
-#define SERVER_PORT 2000
-#define SERVER_IP "127.0.0.1"
 #define MAX_RECV_SEND_BUFF_SIZE 32
 
 static char client_recv_ser_buffer[MAX_RECV_SEND_BUFF_SIZE];
@@ -44,12 +43,6 @@ rpc_send_recv (char *ser_data, int ser_data_size, char *server_reply_msg){
     return recv_size;
 }
 
-
-void
-serialize(char *dst_buffer, char *data, int size){
-    
-    memcpy(dst_buffer, data, size);
-}
 /* client_stub_marshal()*/
 char *
 client_stub_marshal(int a, int b, int *size){
@@ -57,9 +50,10 @@ client_stub_marshal(int a, int b, int *size){
     memset(client_send_ser_buffer, 0, 32);
 
     /*Serialize the first Argument*/
-    serialize(client_send_ser_buffer, (char *)&a, sizeof(int));
+    serialize_int(client_send_ser_buffer, (char *)&a, sizeof(int));
     /*Serialize the second Argument*/
-    serialize(client_send_ser_buffer + sizeof(int), (char *)&a, sizeof(int));
+    serialize_int(client_send_ser_buffer + sizeof(int), (char *)&b, sizeof(int));
+
     *size = sizeof(int) * 2;
 
     /*Serialize buffer looks like this 
@@ -77,7 +71,7 @@ int client_stub_unmarshal(char *ser_data, int size){
 
     /*Reconstruct the result obtained from Server*/
     int res = 0;
-    memcpy(&res, ser_data, sizeof(int));
+    deserialize_int(&res, ser_data, sizeof(int));
     return res;
 }
 
@@ -101,11 +95,11 @@ multiply_rpc(int a , int b){
     int recv_size = 
         rpc_send_recv(ser_data, size, client_recv_ser_buffer);
 
-    /*Step 4 , 5, 6 are executed on Server side*/
+    /*Step 4 , 5, 6 , 7, 8 are executed on Server side*/
 
-    /*Step 7 : Unmarshal the serialized data (result) recvd from Server,
-     * and reconsctruct the arguments
-     *  Signature : <rpc return type> () <char *, int>
+    /*Step 9 : Unmarshal the serialized data (result) recvd from Server,
+     * and reconsctruct the RPC return type
+     * Signature : <rpc return type> () <char *, int>
      * */
     
     int res = client_stub_unmarshal(client_recv_ser_buffer, recv_size);
