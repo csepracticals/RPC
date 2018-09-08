@@ -17,42 +17,56 @@ person_t *de_serialize_person_t(ser_buff_t *b);
 void print_person(person_t *obj);
 void print_company(company_t *obj);
 
+/*Seserializing routine for company_t structure*/
 company_t *de_serialize_company_t(ser_buff_t *b){
 
+    /*In the beginning of ever derialization routine, always write
+     * NULL detection code*/
+
+    /*NULL detector code begin*/
+    unsigned int null_detector = 0;
+    de_serlialize_data((char *)&null_detector , b , sizeof(void *));
+    if(null_detector == 0xFFFFFFFF){
+        return NULL;
+    }
+    serialize_buffer_skip(b, -1 * sizeof(void *));
+    /*NULL detector code end*/
+
+    /*Deserialization starts*/
     company_t *obj = calloc(1, sizeof(company_t));
     de_serialize_data((char *)obj->comp_name, b, 32);
     de_serialize_data((char *)&obj->emp_strength, b, sizeof(int));
-    
-    /*Deserializing height*/
-    unsigned int null_indicator = 0;
-    de_serialize_data((char *)&null_indicator, b, sizeof(void *));
-    if(null_indicator == 0xFFFFFFFF){
-        obj->CEO = NULL;
-    }
-    else{
-        serialize_buffer_skip(b, -1 * sizeof(void *));
-        obj->CEO = de_serialize_person_t (b);
-    }
-
+    obj->CEO = de_serialize_person_t (b);
     return obj;
 }
 
 person_t *de_serialize_person_t(ser_buff_t *b){
 
     int loop_var = 0;
-    unsigned int null_indicator = 0;
+    unsigned int null_detector = 0;
+
+    /*In the beginning of ever derialization routine, always write
+     * NULL detection code*/
+    /*NULL detector code begin*/
+    de_serlialize_data((char *)&null_detector , b , sizeof(void *));
+
+    if(null_detector == 0xFFFFFFFF){
+        return NULL;
+    }
+    serialize_buffer_skip(b, -1 * sizeof(void *));
+    /*NULL detector code end*/
 
     person_t *obj =  calloc(1, sizeof(person_t));
 
     for(loop_var = 0 ; loop_var < 4; loop_var++){
         de_serialize_data((char *)&obj->vehicle_nos[loop_var], b, 
-        sizeof(unsigned int));
+                                    sizeof(unsigned int));
     }
 
     de_serialize_data((char *)&obj->age, b, sizeof(int));
     
-    de_serialize_data((char *)&null_indicator, b, sizeof(void *));
-    if(null_indicator == 0xFFFFFFFF){
+    de_serialize_data((char *)&null_detector, b, sizeof(void *));
+    if(null_detector == 0xFFFFFFFF){
         obj->height = NULL;
     }
     else{
@@ -63,8 +77,8 @@ person_t *de_serialize_person_t(ser_buff_t *b){
 
    for(loop_var = 0 ; loop_var < 5; loop_var++){
        
-       de_serialize_data((char *)&null_indicator, b, sizeof(void *));
-       if(null_indicator == 0xFFFFFFFF){
+       de_serialize_data((char *)&null_detector, b, sizeof(void *));
+       if(null_detector == 0xFFFFFFFF){
             obj->last_salary_amounts[loop_var] = NULL;
        }
        else{
@@ -78,7 +92,7 @@ person_t *de_serialize_person_t(ser_buff_t *b){
    de_serialize_data((char *)obj->name, b, 32);
 
    company_t *company = de_serialize_company_t(b);
-   obj->company = *company; /*shallow copy*/
+   obj->company = *company; /*shallow copy because obj->company is not a pointer*/
    free(company); /*shallow free*/
 
     for(loop_var = 0 ; loop_var < 3; loop_var++){
@@ -87,26 +101,10 @@ person_t *de_serialize_person_t(ser_buff_t *b){
         free(company);
     }
 
-    de_serialize_data((char *)&null_indicator, b, sizeof(void *));
-    if(null_indicator == 0xFFFFFFFF){
-        obj->CEO = NULL;
-    }
-    else{
-       serialize_buffer_skip(b, -1 * sizeof(void *));
-       obj->CEO = de_serialize_person_t(b); 
-       /*Do not free*/
-    }
+    obj->CEO = de_serialize_person_t(b); 
 
     for(loop_var = 0 ; loop_var < 5; loop_var++){
-        
-        de_serialize_data((char *)&null_indicator, b, sizeof(void *));
-        if(null_indicator == 0xFFFFFFFF){
-            obj->administrative_staff[loop_var] = NULL;   
-        }
-        else{
-            serialize_buffer_skip(b, -1 * sizeof(void *));
-            obj->administrative_staff[loop_var] = de_serialize_person_t(b);
-        }
+        obj->administrative_staff[loop_var] = de_serialize_person_t(b);
     }
 }
 
@@ -133,11 +131,13 @@ serialize_person_t(person_t *obj, ser_buff_t *b){
     int loop_var = 0;
     unsigned int null_indicator = 0xFFFFFFFF ;
 
+    /* In the beginning of every Serialization routine, always encode 
+     * 0XFFFFFFFF in the serialized buffer if the object being serialized
+     * is NULL*/
     if(!obj){
         serialize_data(b, (char *)&null_indicator, sizeof(void*));
         return;
     }
-
 
     for(loop_var = 0 ; loop_var < 4; loop_var++){
         serialize_data(b, (char *)&obj->vehicle_nos[loop_var], sizeof(int));
@@ -266,7 +266,7 @@ main(int argc, char **argv){
      * to recieving machine*/
 
 
-    /*Recieving machine has recieved the serialized buffer, 
+    /* Recieving machine has recieved the serialized buffer, 
      * Lets derialize it and reconstruct the object from it*/
 
     /*reset the serialized buffer to read it from beginning again*/
@@ -282,6 +282,12 @@ main(int argc, char **argv){
 
     printf("printing the deserialized object on recieving machine\n");
     print_person(p2);
+
+    /*Match the output of reconstructed object p2 with the p1. They should be exactly same.
+     * If not same, there is some error in serialization/deserialization code*/
+
+    /*free the p2 structure, feeling sleepy
+     * pls do it !!*/
 
     return 0;
 }
