@@ -16,18 +16,12 @@ struct _person_t_ {
     unsigned int vehicle_nos[4];
     int age;
     int * height;
-    unsigned int acc_nos_count;
-    unsigned int * acc_nos;
-    unsigned int * last_salary_amounts[12];
+    unsigned int * last_salary_amounts[5];
     char name[32];
     company_t company;
-    unsigned int prev_employers_count;
-    company_t * prev_employers;
     company_t dream_companies[3];
-    unsigned int friends_count;
-    struct _person_t_ * friends;
     struct _person_t_ * CEO;
-    struct _person_t_ * administrative_staff[12];
+    struct _person_t_ * administrative_staff[5];
 };
 
 
