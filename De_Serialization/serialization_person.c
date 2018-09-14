@@ -170,14 +170,17 @@ serialize_person_t(person_t *obj, ser_buff_t *b){
      * serialize_data(b, (char *)obj->vehicle_nos, sizeof(int) * 4);
      * */
     serialize_data(b, (char *)&obj->age, sizeof(unsigned int));
-    serialize_data(b, (char *)obj->height, sizeof(int));
+    if(obj->height)
+        serialize_data(b, (char *)obj->height, sizeof(int));
+    else
+        serialize_data(b, (char *)&sentinel, sizeof(unsigned int));
 
     for(loop_var = 0 ; loop_var < 5; loop_var++){
         if(obj->last_salary_amounts[loop_var])
             serialize_data(b, (char *)obj->last_salary_amounts[loop_var],
                     sizeof(unsigned int));
         else{
-            serialize_data(b, (char *)&sentinel, sizeof(void*));
+            serialize_data(b, (char *)&sentinel, sizeof(unsigned int));
         }
     }
 
