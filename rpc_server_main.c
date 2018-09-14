@@ -18,6 +18,7 @@ int
 server_stub_unmarshal(char *recv_client_data, int recv_client_data_size,
                       char *empty_buffer, int empty_buffer_size){
 
+   /*Step 5 : Unmarshalling of Arguments*/
     /*Unmarshalling of Arguments is done here.
      * Reconstruct the Arguments*/
 
@@ -41,7 +42,6 @@ rpc_server_process_msg(char *recv_client_data, int recv_client_data_size,
                        char *empty_buffer, int empty_buffer_size){
 
 
-   /*Step 5 : Unmarshalling of Arguments*/
 
    int reply_msg_size = server_stub_unmarshal(recv_client_data, recv_client_data_size, 
                         empty_buffer, empty_buffer_size);
