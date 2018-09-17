@@ -5,14 +5,11 @@
 #include <netinet/in.h>
 #include <netdb.h>
 #include "rpc_common.h"
-
-#define MAX_RECV_SEND_BUFF_SIZE 32
-
-static char client_recv_ser_buffer[MAX_RECV_SEND_BUFF_SIZE];
-static char client_send_ser_buffer[MAX_RECV_SEND_BUFF_SIZE];
+#include "De_Serialization/serialize.h"
 
 int
-rpc_send_recv (char *ser_data, int ser_data_size, char *server_reply_msg){
+rpc_send_recv (ser_buff_t *client_send_ser_buffer, 
+               ser_buff_t *client_recv_ser_buffer){
 
     struct sockaddr_in dest;
     int sockfd = 0, rc = 0, recv_size = 0;
@@ -30,13 +27,15 @@ rpc_send_recv (char *ser_data, int ser_data_size, char *server_reply_msg){
         return -1;
     }
 
-    rc = sendto(sockfd, ser_data, ser_data_size, 0,
-            (struct sockaddr *)&dest, sizeof(struct sockaddr));
+    rc = sendto(sockfd, client_send_ser_buffer->b, 
+                get_serialize_buffer_length(client_send_ser_buffer), 
+                0, (struct sockaddr *)&dest, sizeof(struct sockaddr));
 
     printf("%s() : %d bytes sent\n", __FUNCTION__, rc);
 
-    recv_size = recvfrom(sockfd, server_reply_msg, MAX_RECV_SEND_BUFF_SIZE, 0,
-            (struct sockaddr *)&dest, &addr_len);
+    recv_size = recvfrom(sockfd, client_recv_ser_buffer->b, 
+                get_serialize_buffer_length(client_recv_ser_buffer), 0,
+                (struct sockaddr *)&dest, &addr_len);
 
     printf("%s() : %d bytes recieved\n", __FUNCTION__, recv_size);
 
@@ -44,17 +43,16 @@ rpc_send_recv (char *ser_data, int ser_data_size, char *server_reply_msg){
 }
 
 /* client_stub_marshal()*/
-char *
-client_stub_marshal(int a, int b, int *size){
+ser_buff_t *
+multiply_client_stub_marshal(int a, int b){
 
-    memset(client_send_ser_buffer, 0, 32);
+    ser_buff_t *client_send_ser_buffer = NULL;
+    init_serialized_buffer_of_defined_size(&client_send_ser_buffer, MAX_RECV_SEND_BUFF_SIZE);
 
     /*Serialize the first Argument*/
-    serialize_int(client_send_ser_buffer, (char *)&a, sizeof(int));
+    serialize_data(client_send_ser_buffer, (char *)&a, sizeof(int));
     /*Serialize the second Argument*/
-    serialize_int(client_send_ser_buffer + sizeof(int), (char *)&b, sizeof(int));
-
-    *size = sizeof(int) * 2;
+    serialize_data(client_send_ser_buffer, (char *)&b, sizeof(int));
 
     /*Serialize buffer looks like this 
      *
@@ -67,42 +65,61 @@ client_stub_marshal(int a, int b, int *size){
     return client_send_ser_buffer;
 }
 
-int client_stub_unmarshal(char *ser_data, int size){
+int multiply_client_stub_unmarshal(ser_buff_t *client_recv_ser_buffer){
 
     /*Reconstruct the result obtained from Server*/
     int res = 0;
-    deserialize_int(&res, ser_data, sizeof(int));
+    de_serialize_data((char *)&res, client_recv_ser_buffer, sizeof(int));
     return res;
 }
+
+void 
+init_rpc_infra(){
+
+    /*Initialize anything before starting RPC , if any*/    
+}
+
 
 int
 multiply_rpc(int a , int b){
 
+    /*init RPC buffers*/
+    init_rpc_infra();
+
     /*Step 2 : Serialize/Marshal the arguments*/
-    int size = 0;
+    /*Signature :  ser_buff_t* (client_stub_marshal) <Arg1, Arg2, . . . ,> */
+    ser_buff_t *client_send_ser_buffer = multiply_client_stub_marshal(a, b);
+    ser_buff_t *client_recv_ser_buffer = NULL;
 
-    /*Signature : char * () <Arg1, Arg2, . . . , int *> */
-    char *ser_data = client_stub_marshal(a,b, &size);
-
-    /*Prepare for ecieving the data from Server*/
-    memset(client_recv_ser_buffer, 0, 32);
+    /*Prepare for recieving the data from Server*/
+    init_serialized_buffer_of_defined_size(&client_recv_ser_buffer, 
+                        MAX_RECV_SEND_BUFF_SIZE);
 
     /*Step 3 : Send the serialized data to the server,
      * and wait for the reply*/
 
     /*Fn that will work for all RPCs
-     * Signature : int () <char *, int size, char *> */
-    int recv_size = 
-        rpc_send_recv(ser_data, size, client_recv_ser_buffer);
+     * Signature : void (rpc_send_recv) <ser_buff_t *, ser_buff_t *> */
+    
+     rpc_send_recv(client_send_ser_buffer, client_recv_ser_buffer);
+     /*After sending the data to the server, client should free the 
+      * memory hold by the client_send_ser_buffer*/
+     free_serialize_buffer(client_send_ser_buffer);
+     client_send_ser_buffer = NULL;
 
     /*Step 4 , 5, 6 , 7, 8 are executed on Server side*/
 
     /*Step 9 : Unmarshal the serialized data (result) recvd from Server,
      * and reconsctruct the RPC return type
-     * Signature : <rpc return type> () <char *, int>
+     * Signature : <rpc return type> (client_stub_unmarshal) <ser_buff_t *>
      * */
-    
-    int res = client_stub_unmarshal(client_recv_ser_buffer, recv_size);
+     
+    int res = multiply_client_stub_unmarshal(client_recv_ser_buffer);
+
+    /*Client has successfully reconstructed the result object from
+     * serialized data recvd from Server, Time to free client_recv_ser_buffer*/
+
+    free_serialize_buffer(client_recv_ser_buffer);
     return res;
 }
 

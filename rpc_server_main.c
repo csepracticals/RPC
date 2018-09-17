@@ -2,11 +2,9 @@
 #include <stdlib.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include "rpc_common.h"
 #include <memory.h>
-
-static char server_recv_ser_buffer[MAX_RECV_SEND_BUFF_SIZE];
-static char server_send_ser_buffer[MAX_RECV_SEND_BUFF_SIZE];
+#include "rpc_common.h"
+#include "De_Serialization/serialize.h"
 
 int
 multiply(int a , int b){
@@ -15,38 +13,35 @@ multiply(int a , int b){
 }
 
 int
-server_stub_unmarshal(char *recv_client_data, int recv_client_data_size,
-                      char *empty_buffer, int empty_buffer_size){
-
-   /*Step 5 : Unmarshalling of Arguments*/
-    /*Unmarshalling of Arguments is done here.
-     * Reconstruct the Arguments*/
+multiply_server_stub_unmarshal(ser_buff_t *server_recv_ser_buffer){
 
     int a , b;
-    deserialize_int(&a, recv_client_data, sizeof(int));   
-    deserialize_int(&b, recv_client_data + sizeof(int), sizeof(int));
+    de_serialize_data((char *)&a, server_recv_ser_buffer, sizeof(int));   
+    de_serialize_data((char *)&b, server_recv_ser_buffer, sizeof(int));
 
-    /*Step 6 : Call the Actual RPC*/
-
-    int res = multiply(a, b);
-
-    /*Step 7 :  Serialize the RPC result*/
-    serialize_int(empty_buffer, (char *)&res, sizeof(int));
-
-    /*Return the size of result we have serialize_intd*/
-    return sizeof(int);
+    /*Step 6 : Call the Actual RPC and return its result*/
+    return multiply(a, b);
 }
 
-int
-rpc_server_process_msg(char *recv_client_data, int recv_client_data_size, 
-                       char *empty_buffer, int empty_buffer_size){
+void
+multiply_server_stub_marshal(int res, ser_buff_t *server_send_ser_buffer){
 
+    serialize_data(server_send_ser_buffer, (char *)&res, sizeof(int));
+}
 
+void
+rpc_server_process_msg(ser_buff_t *server_recv_ser_buffer, 
+                       ser_buff_t *server_send_ser_buffer){
 
-   int reply_msg_size = server_stub_unmarshal(recv_client_data, recv_client_data_size, 
-                        empty_buffer, empty_buffer_size);
+   /*  Step 5 */
+   /*  Signature : <rpc return type> server_stub_unmarshal (ser_buff_t *ser_data)
+    *  Unmarshalling of Arguments*/
+    /* Unmarshalling of Arguments is done here. Reconstruct the Arguments*/
 
-   return reply_msg_size; 
+   int res = multiply_server_stub_unmarshal(server_recv_ser_buffer); 
+
+   /*Step 7 : Now we have got the RPC result, time to serialize/Marshall the result*/
+   multiply_server_stub_marshal(res, server_send_ser_buffer);
 }
 
 int
@@ -58,12 +53,11 @@ main(int argc, char **argv){
 	struct sockaddr_in server_addr,
                        client_addr;
 
-	 if ((sock_udp_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP )) == -1)
-        {
-
-                printf("socket creation failed\n");
-                exit(1);
-        }
+    if ((sock_udp_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP )) == -1)
+    {
+        printf("socket creation failed\n");
+        exit(1);
+    }
 
      server_addr.sin_family = AF_INET;
      server_addr.sin_port = htons(SERVER_PORT);
@@ -87,24 +81,38 @@ main(int argc, char **argv){
         exit(1);
     }
 
+    /*Prepare Server Memory buffers to send and Recieve serialized Data*/
+
+    ser_buff_t *server_recv_ser_buffer = NULL,
+               *server_send_ser_buffer = NULL;
+
+    init_serialized_buffer_of_defined_size(&server_recv_ser_buffer, 
+                                MAX_RECV_SEND_BUFF_SIZE);
+
+    init_serialized_buffer_of_defined_size(&server_send_ser_buffer, 
+                                MAX_RECV_SEND_BUFF_SIZE);
+
 	printf("Server ready to service rpc calls\n");
 READ:
-    memset(server_recv_ser_buffer, 0 , MAX_RECV_SEND_BUFF_SIZE);
+    reset_serialize_buffer(server_recv_ser_buffer);
 
-    /*Step 4 : Recoeve the Data from client in local buffer*/
+    /*Step 4 : Recieve the Data from client in local buffer*/
 
-	len = recvfrom(sock_udp_fd, server_recv_ser_buffer, MAX_RECV_SEND_BUFF_SIZE, 0,(struct sockaddr *)&client_addr, &addr_len);
+	len = recvfrom(sock_udp_fd, server_recv_ser_buffer->b, 
+                   get_serialize_buffer_length(server_recv_ser_buffer),
+                   0,(struct sockaddr *)&client_addr, &addr_len);
     printf("No of bytes recvd from client = %d\n", len);
 
     /*prepare the buffer to store the reply msg to be sent to client*/
-    memset(server_send_ser_buffer, 0, MAX_RECV_SEND_BUFF_SIZE);
+    reset_serialize_buffer(server_send_ser_buffer);
 
-	reply_msg_size = rpc_server_process_msg(server_recv_ser_buffer, len, /*Serialized Data which came from client, length of data */
-                                            server_send_ser_buffer, MAX_RECV_SEND_BUFF_SIZE); /*Empty buffer, Maximum capacity of the buffer*/
+	rpc_server_process_msg(server_recv_ser_buffer, /*Serialized Data which came from client*/
+                           server_send_ser_buffer); /*Empty serialized buffer*/
 
-    /*Step 8 : Send the serialize_intd result data back to client*/
-	len = sendto(sock_udp_fd, server_send_ser_buffer, reply_msg_size, 0,
-			(struct sockaddr *)&client_addr, sizeof(struct sockaddr));
+    /*Step 8 : Send the serialized result data back to client*/
+	len = sendto(sock_udp_fd, server_send_ser_buffer->b, 
+                 get_serialize_buffer_data_size(server_send_ser_buffer),
+                 0, (struct sockaddr *)&client_addr, sizeof(struct sockaddr));
 
 	printf("rpc server replied with %d bytes msg\n", len);
 	goto READ;
