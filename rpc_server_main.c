@@ -24,12 +24,6 @@ multiply_server_stub_unmarshal(ser_buff_t *server_recv_ser_buffer){
 }
 
 void
-multiply_server_stub_marshal(int res, ser_buff_t *server_send_ser_buffer){
-
-    serialize_data(server_send_ser_buffer, (char *)&res, sizeof(int));
-}
-
-void
 rpc_server_process_msg(ser_buff_t *server_recv_ser_buffer, 
                        ser_buff_t *server_send_ser_buffer){
 
@@ -40,8 +34,6 @@ rpc_server_process_msg(ser_buff_t *server_recv_ser_buffer,
 
    int res = multiply_server_stub_unmarshal(server_recv_ser_buffer); 
 
-   /*Step 7 : Now we have got the RPC result, time to serialize/Marshall the result*/
-   multiply_server_stub_marshal(res, server_send_ser_buffer);
 }
 
 int
@@ -109,12 +101,6 @@ READ:
 	rpc_server_process_msg(server_recv_ser_buffer, /*Serialized Data which came from client*/
                            server_send_ser_buffer); /*Empty serialized buffer*/
 
-    /*Step 8 : Send the serialized result data back to client*/
-	len = sendto(sock_udp_fd, server_send_ser_buffer->b, 
-                 get_serialize_buffer_data_size(server_send_ser_buffer),
-                 0, (struct sockaddr *)&client_addr, sizeof(struct sockaddr));
-
-	printf("rpc server replied with %d bytes msg\n", len);
 	goto READ;
 	return 0;
 }
