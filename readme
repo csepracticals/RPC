@@ -1,0 +1,13 @@
+Compile Commands :
+
+Compile the serialization Library : 
+gcc -g -c De_Serialization/serialize.c -o De_Serialization/serialize.o
+
+
+Compile Client :
+gcc -g -c multiply.c -o multiply.o
+gcc -g multiply.o De_Serialization/serialize.o -o client
+
+Compile Server :
+gcc -g -c rpc_server_main.c -o rpc_server_main.o
+gcc -g rpc_server_main.o De_Serialization/serialize.o -o server
